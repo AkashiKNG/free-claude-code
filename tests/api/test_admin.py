@@ -174,6 +174,27 @@ def test_admin_page_is_loopback_only(monkeypatch, tmp_path, path):
     assert remote_client.get(path).status_code == 403
 
 
+def test_admin_trusted_proxy_host_is_opt_in(monkeypatch, tmp_path):
+    _set_home(monkeypatch, tmp_path)
+    app = create_test_app()
+    proxied = TestClient(app, base_url="http://fcc.localhost", client=("172.20.0.4", 50000))
+
+    monkeypatch.delenv("FCC_ADMIN_TRUSTED_HOSTS", raising=False)
+    assert proxied.get("/admin").status_code == 403
+
+    monkeypatch.setenv("FCC_ADMIN_TRUSTED_HOSTS", "other.example, fcc.localhost")
+    assert proxied.get("/admin").status_code == 200
+    assert (
+        proxied.get("/admin/api/status", headers={"origin": "http://fcc.localhost"}).status_code
+        == 200
+    )
+    assert proxied.get("/admin", headers={"origin": "http://evil.example"}).status_code == 403
+    assert proxied.get("/admin", headers={"origin": "null"}).status_code == 403
+
+    other_host = TestClient(app, base_url="http://other.localhost", client=("172.20.0.4", 50000))
+    assert other_host.get("/admin").status_code == 403
+
+
 def test_admin_page_uses_installed_version(monkeypatch, tmp_path):
     _set_home(monkeypatch, tmp_path)
     monkeypatch.setattr(

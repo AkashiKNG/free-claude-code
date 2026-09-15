@@ -1104,6 +1104,21 @@ function appendAdminLink(target) {
   byId("messageArea").append(document.createElement("br"), link);
 }
 
+function isLoopbackHostname(hostname) {
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return host === "localhost" || host === "::1" || /^127(?:\.\d{1,3}){3}$/.test(host);
+}
+
+// Behind a local reverse proxy the server only knows its loopback address, which the
+// browser cannot reach; reconnect on the address this Admin page was opened from.
+function reconnectTarget(adminUrl) {
+  const reported = new URL(adminUrl || "/admin", window.location.href);
+  if (isLoopbackHostname(reported.hostname) && !isLoopbackHostname(window.location.hostname)) {
+    return new URL("/admin", window.location.href);
+  }
+  return reported;
+}
+
 async function reconnectAfterRestart() {
   clearTimeout(state.startupTimer);
   state.startupTimer = null;
@@ -1111,7 +1126,7 @@ async function reconnectAfterRestart() {
   state.startupRequest = null;
   state.startupAgain = false;
   const { restart, warnings } = state.restart;
-  const target = new URL(restart.admin_url || "/admin", window.location.href);
+  const target = reconnectTarget(restart.admin_url);
   setApplying(true);
   showMessage(["Applied. Reconnecting to the server…", ...warnings].join("\n"), warnings.length ? "warn" : "ok");
   try {
